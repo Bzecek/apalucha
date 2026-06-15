@@ -1,15 +1,3 @@
-[connections.gsheets]
-spreadsheet = "https://docs.google.com/spreadsheets/d/19bLijNdL-_jF9gy3aTdc4oYRqMSnyrpfWF0G048zcIE/edit?gid=0#gid=0"
-type = "service_account"
-project_id = "apalucha-499518"
-private_key_id = "f0b8c01039fdeda5b2d0e73d03f78a5cc6d9043f"
-private_key = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDCJzCSUlfCHQUN\ngTzw45mA3TSnR/cHYSw91YBYA/xRo5GyVqXyy7jROFIu2kCE8AG8QMwWJGpXhUvB\nI4mdtAA1b4+Dzho6ut3pi/zQyt9WpGCdNSW/QlaUIt+uwcU9eCY0OfCBcVKXknOe\nb90X1HBKZARw5ZO5WmqcMAqpQilNCBq+hGaCNWBppzZm8/DZ3W1jVT7NsfPSXmZe\n9lELFyfwKccojaPNFkBCb6lt2rGaG6NgHPuGnCJ+W52CUHlqLnZivSSkBUNoxd++\n0SKwS0n57iTJUw8ReVecxkjM8clFejZq68iMfYXJfWYx1MRdWu7mcrqhwA9HTGmz\nyrYC0aoRAgMBAAECggEALyLimPOi2L7A5kl1KSqoru+FhANlxwXhftWhxjyZepyS\nl9CPk4XARhM9aKCWP3Ahi7nTkqCerMbw4GAnXgFAd7ixCBf2qEGL9NKGu441cMyR\npDkuA+QwLuDUm5Hxt/2+kLlsWZDQs3nb1iBkdg+ef4EOzvX9ymdYMLk9LWChtFCS\nDNrbVlaNoceevdRzp2qbksmLlKiRdiSfMoCaIOzPqJ/0jX5VyP0Jy1EF9uDIfJdJ\nqjO8Cf9xgersYrWzYggjK6vIVrHwtUaEpLS0F5PjnZ0cglu+Z60VpPtdprjF0rkn\nxWD8vIzC/xPCa1mixjtrRE0o2w4b9zKTptzvRS4C7QKBgQDobGdLcwVV01jOXH0W\nomLhllPGFP0Xn8t8x6vvpOlkT8mgeTu1v8u9igncGqtkDGLMJ/D9nOHJ77KPXZkX\naFXVLOcBYV49SpO3NWx9GqDRZkDsj5tdOxeOCe5W3rz6oFoNUzmSvBAkvTqCdKhn\n3orzmpCgZz7SK21GF0vjUPHEKwKBgQDV2Po0WVBRPzGU7F+xHDPp0kwa1gTnSbFx\n4hPoSPYRq2tQemdK0ZoTofjKiwT3Mfu8mXmF9DoCCclPT9GXVQVCPLD8p2qeEE6b\nGz0mfTnr/q0a4wHWwY3mTvIYrC8qyBakx6/b+lUXXE96zS5zcOyQjA6vFcoG+pb/\nCGXyTxCAswKBgGRyLPYDgIPF8fRFLl4w0bESiaPqgDLMgWGs3VaVG7SZctbibfav\nK/r/BCHWeMmlPLFkdZb1TPM7nxysY7QlCCs326HSFatBZrNf6EHs1yGIInjZ21gg\naJ6fFhz+6Accc66ckB4lHojyKq4kgn9ZQw3id6yK0jB8Sh5nhQl5evK/AoGBAIQb\nJIZOXoWyiki7tWnOSGu8FHPHnwPazJnT1gR7fjfwM71lwIXB8nMKbo2BUDH9WMxr\n61zLQUKdFRW/83SPe04t/BA4xG6dGFJNg3tRhQS7MekYL7yhma2bO4fuZr0BGqv1\nCDjW7tYdmqP8OSPrsNijDTcwOLwS9lDauU/1c/ZtAoGBAM9Au1bSalYB9ZgOpDV4\nkltm4BADY0EcoRI366oZZaXCNarjM5KZR6zyhtCh9mW1HVm9ctHbUxY17KeD/eIs\n2p19L6fixI+pHAW08SGb8DOVIp3B6hfsZ9CeD/3oMq4hzSwjfebnIC39BPGVbtlg\njMfnmI5IJQdEHXg42Dnxx2W5\n-----END PRIVATE KEY-----\n"
-client_email = "streamlit-apalucha@apalucha-499518.iam.gserviceaccount.com"
-client_id = "104157882347641330047"
-auth_uri = "https://accounts.google.com/o/oauth2/auth"
-token_uri = "https://oauth2.googleapis.com/token"
-auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
-client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/streamlit-apalucha%40apalucha-499518.iam.gserviceaccount.com"
 import streamlit as st
 import pandas as pd
 from datetime import datetime
