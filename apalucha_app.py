@@ -4,13 +4,15 @@ from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
 # ─────────────────────────────────────────────
-# KONFIGURACE — tábornická paleta (oheň)
+# KONFIGURACE — les + oheň (zelená základ, jantar jako akcent)
 # ─────────────────────────────────────────────
-OHEN        = "#e6963c"   # hlavní jantarová (plamen)
-OHEN_SVE    = "#c47a1e"   # tmavší jantar pro text/hover
-OHEN_KARTA  = "rgba(230,150,60,0.14)"   # podklad avataru
-ZELENA      = "#7bbf5a"   # doplňková zeleň (kladné saldo)
-CERVENA     = "#d9603f"   # cihlově červená (záporné saldo)
+ZELENA_HL   = "#6aa84f"   # hlavní lesní zelená (tlačítka, jméno)
+ZELENA_SVE  = "#8cc56a"   # světlejší zeleň pro text na tmavém
+OHEN        = "#c1843c"   # jantarový akcent (banner proužek, čísla)
+OHEN_SVE    = "#c1843c"
+ZELENA      = "#7bbf5a"   # kladné saldo
+CERVENA     = "#d9603f"   # záporné saldo
+ZELENA_KARTA = "rgba(106,168,79,0.12)"   # podklad avataru/karet
 
 OTCOVE_SEZNAM = ["Bzek", "Pošták", "Boss", "Tonda", "Jirka", "Kolouch"]
 
@@ -24,23 +26,23 @@ st.markdown(f"""
         transition: all 0.15s ease;
     }}
     div.stButton > button:hover {{
-        border-color: {OHEN};
-        color: {OHEN_SVE};
+        border-color: {ZELENA_HL};
+        color: {ZELENA_SVE};
     }}
     div.stButton > button[kind="primary"] {{
-        background-color: {OHEN};
-        border-color: {OHEN};
-        color: #2b1c08;
+        background-color: {ZELENA_HL};
+        border-color: {ZELENA_HL};
+        color: #0c1a06;
     }}
     div.stButton > button[kind="primary"]:hover {{
-        background-color: {OHEN_SVE};
-        border-color: {OHEN_SVE};
+        background-color: #5a9442;
+        border-color: #5a9442;
         color: #fff;
     }}
-    [data-testid="stMetricValue"] {{ color: {OHEN_SVE}; }}
+    [data-testid="stMetricValue"] {{ color: {ZELENA_SVE}; }}
     .karta {{
-        background: {OHEN_KARTA};
-        border: 1px solid rgba(230,150,60,0.25);
+        background: {ZELENA_KARTA};
+        border: 1px solid rgba(106,168,79,0.22);
         border-radius: 14px;
         padding: 10px 14px;
         margin-bottom: 8px;
@@ -49,31 +51,31 @@ st.markdown(f"""
     }}
     .avatar {{
         width: 38px; height: 38px; border-radius: 50%;
-        background: {OHEN_KARTA}; color: {OHEN_SVE};
+        background: {ZELENA_KARTA}; color: {ZELENA_SVE};
         display: flex; align-items: center; justify-content: center;
         font-weight: 700; font-size: 14px; margin-right: 12px;
         flex-shrink: 0;
-        border: 1px solid rgba(230,150,60,0.4);
+        border: 1px solid rgba(106,168,79,0.4);
     }}
-    /* tábornický banner */
+    /* tábornický banner — zelené jméno, ohnivý boční proužek */
     .banner {{
-        background: linear-gradient(180deg, rgba(230,150,60,0.10), rgba(230,150,60,0.02));
+        background: linear-gradient(180deg, rgba(106,168,79,0.10), rgba(106,168,79,0.02));
         border-left: 5px solid {OHEN};
         border-radius: 14px;
         padding: 20px 22px;
         margin-bottom: 6px;
     }}
     .banner-nazev {{
-        font-size: 34px; font-weight: 700; color: {OHEN};
+        font-size: 34px; font-weight: 700; color: {ZELENA_SVE};
         margin: 0; line-height: 1.1;
     }}
     .banner-podtitul {{
         font-size: 13px; color: var(--text-color, #888);
         margin-top: 6px; opacity: 0.85;
     }}
-    /* účtenka */
+    /* účtenka — ohnivý okraj jako uhlíky */
     .uctenka {{
-        border: 1px dashed rgba(230,150,60,0.55);
+        border: 1px dashed rgba(193,132,60,0.55);
         border-radius: 12px;
         padding: 16px 18px;
         margin-top: 14px;
@@ -81,7 +83,7 @@ st.markdown(f"""
     }}
     .uctenka-hlava {{
         text-align: center; font-size: 12px; letter-spacing: 1px;
-        color: {OHEN_SVE}; border-bottom: 1px dashed rgba(230,150,60,0.4);
+        color: {OHEN}; border-bottom: 1px dashed rgba(193,132,60,0.4);
         padding-bottom: 8px; margin-bottom: 10px;
     }}
     .uctenka-radek {{
@@ -92,8 +94,8 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # zpětná kompatibilita názvů barev používaných dál v kódu
-BARVA = OHEN
-BARVA_SVE = OHEN_SVE
+BARVA = ZELENA_HL
+BARVA_SVE = ZELENA_SVE
 
 # ─────────────────────────────────────────────
 # PŘIPOJENÍ NA GOOGLE SHEETS
@@ -649,14 +651,14 @@ st.divider()
 st.caption(f"Data ročníku „{rocnik}\" se ukládají do Google Sheets a jsou sdílená pro všechny s odkazem.")
 
 st.markdown(f"""
-    <div style="background-color:rgba(230,150,60,0.08);border:1px solid rgba(230,150,60,0.25);
+    <div style="background-color:rgba(106,168,79,0.08);border:1px solid rgba(106,168,79,0.22);
                 padding:16px;border-radius:14px;margin-top:18px;text-align:center;">
-        <span style="font-weight:700;font-size:0.95rem;color:{OHEN};">🏕️ Apalucha</span><br>
+        <span style="font-weight:700;font-size:0.95rem;color:{ZELENA_SVE};">🏕️ Apalucha</span><br>
         <span style="color:#888;font-size:0.78rem;">Pánská jízda s dětmi pod stanem</span>
-        <div style="margin:10px auto;border-top:1px dashed rgba(230,150,60,0.4);width:60%;"></div>
+        <div style="margin:10px auto;border-top:1px dashed rgba(193,132,60,0.5);width:60%;"></div>
         <span style="font-size:0.82rem;">Autor: <b>Pavel Dvořáček</b></span><br>
         <a href="mailto:pavel.dvoracek@obchod.t-mobile.cz?subject=Apalucha%20-%20zpetna%20vazba"
-           style="display:inline-block;margin-top:8px;color:#2b1c08!important;background-color:{OHEN};
+           style="display:inline-block;margin-top:8px;color:#0c1a06!important;background-color:{ZELENA_HL};
                   padding:6px 16px;border-radius:18px;text-decoration:none;font-size:0.78rem;font-weight:700;">
            📩 Napsat autorovi
         </a>
