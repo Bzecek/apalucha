@@ -6,18 +6,16 @@ from streamlit_gsheets import GSheetsConnection
 # ─────────────────────────────────────────────
 # KONFIGURACE
 # ─────────────────────────────────────────────
-BARVA      = "#2e7d32"   # lesní zelená
-BARVA_SVE  = "#3B6D11"   # tmavší zelená pro text
-BARVA_KARTA = "#EAF3DE"  # světlá zelená pozadí avataru
+BARVA       = "#2e7d32"
+BARVA_SVE   = "#3B6D11"
+BARVA_KARTA = "#EAF3DE"
 
-# Předpřipravený seznam otců (rychlé přidání jedním klikem)
-OTCOVE_SEZNAM = ["Bzek", "Pošták", "Boss", "Tonda", "Jirka"]
+OTCOVE_SEZNAM = ["Bzek", "Pošták", "Boss", "Tonda", "Jirka", "Kolouch"]
 
 st.set_page_config(page_title="Apalucha – účtování", page_icon="🏕️", layout="centered")
 
 st.markdown(f"""
     <style>
-    /* hezčí tlačítka */
     div.stButton > button {{
         border-radius: 12px;
         font-weight: 500;
@@ -27,13 +25,11 @@ st.markdown(f"""
         border-color: {BARVA};
         color: {BARVA};
     }}
-    /* primární tlačítka zelená */
     div.stButton > button[kind="primary"] {{
         background-color: {BARVA};
         border-color: {BARVA};
     }}
     [data-testid="stMetricValue"] {{ color: {BARVA}; }}
-    /* karta účastníka / výdaje */
     .karta {{
         background: rgba(46,125,50,0.06);
         border: 1px solid rgba(46,125,50,0.15);
@@ -55,13 +51,28 @@ st.markdown(f"""
 
 # ─────────────────────────────────────────────
 # PŘIPOJENÍ NA GOOGLE SHEETS
-# Každý ročník = vlastní list (worksheet).
 # Sloupce: Typ, Kdo, Co, Castka, KrkDeti, ZaKoho, Datum
-#   Typ:    "ucastnik" | "baget" | "vydaj"
-#   ZaKoho: "BAGET" | "VSICHNI" | "Jméno1;Jméno2"
+#   Typ:    "ucastnik" | "bank" | "vydaj"
+#   ZaKoho u výdaje:
+#       "BANK"              → hradí se ze společného banku
+#       "VSICHNI"           → na všechny otce + jejich děti (jídla)
+#       "Pošták:3;Tonda:1"  → jen vybraní; číslo = počet jídel
 # ─────────────────────────────────────────────
 conn = st.connection("gsheets", type=GSheetsConnection)
 SLOUPCE = ["Typ", "Kdo", "Co", "Castka", "KrkDeti", "ZaKoho", "Datum"]
+
+
+def zajisti_list(rocnik):
+    try:
+        spreadsheet = conn._instance.open_by_url(st.secrets["connections"]["gsheets"]["spreadsheet"])
+        existujici = [w.title for w in spreadsheet.worksheets()]
+        if rocnik not in existujici:
+            ws = spreadsheet.add_worksheet(title=rocnik, rows=200, cols=len(SLOUPCE))
+            ws.update([SLOUPCE])
+            return True
+    except Exception:
+        pass
+    return False
 
 
 @st.cache_data(ttl=30)
@@ -80,7 +91,11 @@ def nacti(rocnik):
 
 
 def uloz(rocnik, df):
-    conn.update(worksheet=rocnik, data=df[SLOUPCE])
+    try:
+        conn.update(worksheet=rocnik, data=df[SLOUPCE])
+    except Exception:
+        zajisti_list(rocnik)
+        conn.update(worksheet=rocnik, data=df[SLOUPCE])
     st.cache_data.clear()
 
 
@@ -99,6 +114,39 @@ def smaz_radek(rocnik, idx):
 
 def iniciala(jmeno):
     return (jmeno[:2]).upper() if jmeno else "??"
+
+
+def deti_text(deti):
+    if deti == 0:
+        return "bez dětí"
+    if deti == 1:
+        return "1 dítě"
+    if deti < 5:
+        return f"{deti} děti"
+    return f"{deti} dětí"
+
+
+# stav pro potvrzení mazání: ukládáme klíč řádku, který čeká na potvrzení
+if "maze" not in st.session_state:
+    st.session_state.maze = None
+
+
+def tlacitko_smazat(rocnik, idx, klic):
+    """Vykreslí mazací tlačítko s potvrzením. Vrací True, pokud byl řádek smazán."""
+    if st.session_state.maze == klic:
+        st.caption("Opravdu smazat?")
+        ca, cn = st.columns(2)
+        if ca.button("✅ Ano", key=f"ano_{klic}", use_container_width=True):
+            smaz_radek(rocnik, idx)
+            st.session_state.maze = None
+            st.rerun()
+        if cn.button("❌ Ne", key=f"ne_{klic}", use_container_width=True):
+            st.session_state.maze = None
+            st.rerun()
+    else:
+        if st.button("🗑️", key=f"del_{klic}", use_container_width=True):
+            st.session_state.maze = klic
+            st.rerun()
 
 
 # ─────────────────────────────────────────────
@@ -122,15 +170,17 @@ if vlastni.strip():
 
 st.divider()
 
+zajisti_list(rocnik)
+
 df = nacti(rocnik)
-df_uc    = df[df["Typ"] == "ucastnik"].reset_index()
-df_baget = df[df["Typ"] == "baget"].reset_index()
-df_vyd   = df[df["Typ"] == "vydaj"].reset_index()
+df_uc   = df[df["Typ"] == "ucastnik"].reset_index()
+df_bank = df[df["Typ"] == "bank"].reset_index()
+df_vyd  = df[df["Typ"] == "vydaj"].reset_index()
 
 otcove = list(df_uc["Kdo"].dropna().astype(str))
 
 
-def krky(jmeno):
+def jidla_otce(jmeno):
     radek = df_uc[df_uc["Kdo"] == jmeno]
     if radek.empty:
         return 1
@@ -140,19 +190,27 @@ def krky(jmeno):
         return 1
 
 
-celkem_krku = sum(krky(o) for o in otcove)
+def deti_otce(jmeno):
+    radek = df_uc[df_uc["Kdo"] == jmeno]
+    if radek.empty:
+        return 0
+    try:
+        return int(float(radek.iloc[0]["KrkDeti"] or 0))
+    except Exception:
+        return 0
+
+
+celkem_jidel = sum(jidla_otce(o) for o in otcove)
 
 # ─────────────────────────────────────────────
-# 1) OTCOVÉ A DĚTI — rychlé přidání
+# 1) OTCOVÉ A DĚTI
 # ─────────────────────────────────────────────
 st.header("1. Otcové a děti")
 st.caption("Klikni na jméno a vyber, kolik má s sebou dětí.")
 
-# stav: na koho jsme klikli a čekáme na zadání počtu dětí
 if "ceka_na_deti" not in st.session_state:
     st.session_state.ceka_na_deti = None
 
-# tlačítka rychlého přidání — 2 ve sloupci
 nepridani = [o for o in OTCOVE_SEZNAM if o not in otcove]
 if nepridani:
     cols = st.columns(2)
@@ -163,7 +221,6 @@ if nepridani:
 else:
     st.success("Všichni z party jsou přidaní 🎉")
 
-# dialog pro zadání počtu dětí
 if st.session_state.ceka_na_deti:
     jm = st.session_state.ceka_na_deti
     with st.container(border=True):
@@ -182,57 +239,58 @@ if st.session_state.ceka_na_deti:
             st.session_state.ceka_na_deti = None
             st.rerun()
 
-# seznam přidaných jako karty
 if otcove:
     st.write("")
     for _, r in df_uc.iterrows():
-        deti = int(float(r["KrkDeti"] or 0))
-        jidla = 1 + deti
-        deti_txt = "bez dětí" if deti == 0 else (f"{deti} dítě" if deti == 1 else f"{deti} děti" if deti < 5 else f"{deti} dětí")
+        deti = deti_otce(r["Kdo"])
         c1, c2 = st.columns([5, 1])
         c1.markdown(
             f'<div class="karta">'
             f'<div class="avatar">{iniciala(r["Kdo"])}</div>'
             f'<div><div style="font-weight:600;font-size:15px;">{r["Kdo"]}</div>'
-            f'<div style="font-size:12px;color:#888;">{deti_txt} · {jidla} jídel</div></div>'
+            f'<div style="font-size:12px;color:#888;">{deti_text(deti)} · {1 + deti} jídel</div></div>'
             f'</div>',
             unsafe_allow_html=True
         )
-        if c2.button("🗑️", key=f"del_uc_{r['index']}", use_container_width=True):
-            smaz_radek(rocnik, r["index"])
-            st.rerun()
+        with c2:
+            tlacitko_smazat(rocnik, r["index"], f"uc_{r['index']}")
 else:
     st.info("Zatím nikdo. Přidej prvního otce.")
 
 # ─────────────────────────────────────────────
-# 2) SPOLEČNÝ BAGET
+# 2) SPOLEČNÝ BANK
 # ─────────────────────────────────────────────
-st.header("2. Společný baget na suroviny")
+st.header("2. Společný bank")
 
 if otcove:
-    with st.form("f_baget", clear_on_submit=False):
-        st.caption("Kolik kdo vložil do společného bagetu. Tip: nech vyplnit částkou na jedno jídlo.")
-        na_krk = st.number_input("Rychlé vyplnění: částka na jedno jídlo (Kč)", min_value=0, value=0, step=50)
+    with st.form("f_bank", clear_on_submit=False):
+        st.caption("Kolik každý otec vložil na začátku do společného banku (např. 3 000 Kč).")
         vlozky = {}
         for o in otcove:
-            existuje = df_baget[df_baget["Kdo"] == o]
-            if not existuje.empty:
-                vychozi = int(float(existuje.iloc[0]["Castka"] or 0))
-            else:
-                vychozi = na_krk * krky(o) if na_krk else 0
-            vlozky[o] = st.number_input(f"{o} ({krky(o)} jídel)", min_value=0, value=int(vychozi), step=50, key=f"bg_{o}")
-        if st.form_submit_button("💾 Uložit baget", type="primary", use_container_width=True):
+            existuje = df_bank[df_bank["Kdo"] == o]
+            vychozi = int(float(existuje.iloc[0]["Castka"] or 0)) if not existuje.empty else 0
+            vlozky[o] = st.number_input(f"{o} vložil (Kč)", min_value=0, value=int(vychozi), step=100, key=f"bank_{o}")
+        if st.form_submit_button("💾 Uložit vklady", type="primary", use_container_width=True):
             df_now = nacti(rocnik)
-            df_now = df_now[df_now["Typ"] != "baget"]
+            df_now = df_now[df_now["Typ"] != "bank"]
             nove = [{
-                "Typ": "baget", "Kdo": o, "Co": "", "Castka": int(vlozky[o]),
+                "Typ": "bank", "Kdo": o, "Co": "", "Castka": int(vlozky[o]),
                 "KrkDeti": 0, "ZaKoho": "", "Datum": datetime.now().strftime("%d.%m.%Y %H:%M"),
             } for o in otcove]
             uloz(rocnik, pd.concat([df_now, pd.DataFrame(nove)], ignore_index=True))
             st.rerun()
 
-    baget_celkem = sum(int(float(c or 0)) for c in df_baget["Castka"]) if not df_baget.empty else 0
-    st.metric("Baget celkem", f"{baget_celkem} Kč")
+    bank_vlozeno = sum(int(float(c or 0)) for c in df_bank["Castka"]) if not df_bank.empty else 0
+    bank_utraceno = sum(int(float(r["Castka"] or 0)) for _, r in df_vyd.iterrows() if str(r["ZaKoho"]) == "BANK")
+    bank_zustatek = bank_vlozeno - bank_utraceno
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Vloženo", f"{bank_vlozeno} Kč")
+    m2.metric("Utraceno z banku", f"{bank_utraceno} Kč")
+    m3.metric("Zůstatek", f"{bank_zustatek} Kč")
+    if bank_zustatek < 0:
+        st.warning("Bank je v mínusu — utratilo se víc, než kolik je v něm vloženo.")
+    st.caption("Zůstatek zůstává v banku na příště, nerozpočítává se mezi otce.")
 else:
     st.info("Nejdřív přidej účastníky.")
 
@@ -242,49 +300,84 @@ else:
 st.header("3. Výdaje – kdo platil za koho")
 
 if otcove:
-    with st.form("f_vyd", clear_on_submit=True):
-        co = st.text_input("Co to bylo", placeholder="nákup masa, půjčovné, pivo…")
-        c1, c2 = st.columns(2)
-        kdo = c1.selectbox("Kdo platil", otcove)
-        castka = c2.number_input("Částka (Kč)", min_value=0, value=0, step=50)
-        typ_del = st.radio("Za koho se to dělí?",
-                           ["Z bagetu (suroviny)", "Všichni rovným dílem", "Jen vybraní"], index=0)
-        vybrani = st.multiselect("Jen vybraní – koho se týká", otcove)
-        if st.form_submit_button("➕ Přidat výdaj", type="primary", use_container_width=True):
-            if castka <= 0:
-                st.warning("Zadej částku.")
-            elif typ_del == "Jen vybraní" and not vybrani:
-                st.warning("Vyber aspoň jednoho člověka.")
-            else:
-                if typ_del == "Z bagetu (suroviny)":
-                    zk = "BAGET"
-                elif typ_del == "Všichni rovným dílem":
-                    zk = "VSICHNI"
-                else:
-                    zk = ";".join(vybrani)
-                pridej_radek(rocnik, {
-                    "Typ": "vydaj", "Kdo": kdo, "Co": co.strip() or "—", "Castka": int(castka),
-                    "KrkDeti": 0, "ZaKoho": zk, "Datum": datetime.now().strftime("%d.%m.%Y %H:%M"),
-                })
-                st.rerun()
+    st.caption("Zadej, kdo platil, kolik, a koho se výdaj týká. Dělí se na jídla (otec + jeho děti).")
 
+    co = st.text_input("Co to bylo", placeholder="společný oběd, půjčovné, pivo…", key="vyd_co")
+    c1, c2 = st.columns(2)
+    kdo = c1.selectbox("Kdo platil", otcove, key="vyd_kdo")
+    castka = c2.number_input("Kolik zaplatil (Kč)", min_value=0, value=0, step=50, key="vyd_castka")
+
+    typ_del = st.radio(
+        "Jak se výdaj hradí / dělí?",
+        ["Ze společného banku", "Všichni (otcové + děti)", "Jen vybraní"],
+        index=0, key="vyd_typ"
+    )
+
+    vybrani = []
+    rucni_jidla = {}
+    if typ_del == "Jen vybraní":
+        vybrani = st.multiselect("Koho se výdaj týká", otcove, key="vyd_vyb")
+        if vybrani:
+            uprav = st.checkbox("Ručně upravit počet jídel u vybraných", key="vyd_uprav")
+            if uprav:
+                st.caption("Kolik jídel (otec + děti) připadá na každého u tohoto výdaje:")
+                for o in vybrani:
+                    rucni_jidla[o] = st.number_input(
+                        f"{o} — počet jídel",
+                        min_value=1, max_value=20, value=jidla_otce(o), step=1, key=f"vyd_j_{o}"
+                    )
+
+    if st.button("➕ Přidat výdaj", type="primary", use_container_width=True, key="vyd_pridat"):
+        if castka <= 0:
+            st.warning("Zadej částku.")
+        elif typ_del == "Jen vybraní" and not vybrani:
+            st.warning("Vyber aspoň jednoho člověka.")
+        else:
+            if typ_del == "Ze společného banku":
+                zk = "BANK"
+            elif typ_del == "Všichni (otcové + děti)":
+                zk = "VSICHNI"
+            else:
+                casti = []
+                for o in vybrani:
+                    j = rucni_jidla.get(o, jidla_otce(o))
+                    casti.append(f"{o}:{int(j)}")
+                zk = ";".join(casti)
+            pridej_radek(rocnik, {
+                "Typ": "vydaj", "Kdo": kdo, "Co": co.strip() or "—", "Castka": int(castka),
+                "KrkDeti": 0, "ZaKoho": zk, "Datum": datetime.now().strftime("%d.%m.%Y %H:%M"),
+            })
+            st.rerun()
+
+    st.write("")
     if not df_vyd.empty:
         for _, r in df_vyd.iterrows():
             zk = str(r["ZaKoho"])
-            popis = "z bagetu" if zk == "BAGET" else "všichni" if zk == "VSICHNI" else zk.replace(";", ", ")
+            if zk == "BANK":
+                popis = "ze společného banku"
+            elif zk == "VSICHNI":
+                popis = "všichni (otcové + děti)"
+            else:
+                kusy = []
+                for cast in zk.split(";"):
+                    if ":" in cast:
+                        jm_o, j = cast.split(":")
+                        kusy.append(f"{jm_o} ({j} j.)")
+                    else:
+                        kusy.append(cast)
+                popis = ", ".join(kusy)
             castka_v = int(float(r["Castka"] or 0))
             c1, c2 = st.columns([5, 1])
             c1.markdown(
                 f'<div class="karta">'
                 f'<div class="avatar">{iniciala(r["Kdo"])}</div>'
                 f'<div style="flex:1;"><div style="font-weight:600;font-size:15px;">{r["Co"]} · {castka_v} Kč</div>'
-                f'<div style="font-size:12px;color:#888;">platil {r["Kdo"]} · za: {popis}</div></div>'
+                f'<div style="font-size:12px;color:#888;">platil {r["Kdo"]} · {popis}</div></div>'
                 f'</div>',
                 unsafe_allow_html=True
             )
-            if c2.button("🗑️", key=f"del_vyd_{r['index']}", use_container_width=True):
-                smaz_radek(rocnik, r["index"])
-                st.rerun()
+            with c2:
+                tlacitko_smazat(rocnik, r["index"], f"vyd_{r['index']}")
     else:
         st.info("Zatím žádné výdaje.")
 else:
@@ -292,49 +385,43 @@ else:
 
 # ─────────────────────────────────────────────
 # 4) VYROVNÁNÍ
+# Bank se NErozpočítává mezi otce (zůstatek jde na příště).
+# Výdaje hrazené z banku se ve vyrovnání ignorují — platí je společný bank.
 # ─────────────────────────────────────────────
 st.header("4. Vyrovnání")
 
 if otcove:
     saldo = {o: 0.0 for o in otcove}
 
-    for _, b in df_baget.iterrows():
-        if b["Kdo"] in saldo:
-            saldo[b["Kdo"]] += float(b["Castka"] or 0)
-
-    baget_vydaje = sum(float(r["Castka"] or 0) for _, r in df_vyd.iterrows() if str(r["ZaKoho"]) == "BAGET")
-    for _, r in df_vyd.iterrows():
-        if str(r["ZaKoho"]) == "BAGET" and r["Kdo"] in saldo:
-            saldo[r["Kdo"]] += float(r["Castka"] or 0)
-
-    if celkem_krku > 0:
-        baget_celkem_val = sum(float(b["Castka"] or 0) for _, b in df_baget.iterrows())
-        k_rozdeleni = baget_vydaje if baget_vydaje > 0 else baget_celkem_val
-        na_krk = k_rozdeleni / celkem_krku
-        for o in otcove:
-            saldo[o] -= na_krk * krky(o)
-
     for _, r in df_vyd.iterrows():
         zk = str(r["ZaKoho"])
-        if zk == "BAGET":
-            continue
+        if zk == "BANK":
+            continue  # hradí bank, ne otcové
         c = float(r["Castka"] or 0)
         if r["Kdo"] in saldo:
             saldo[r["Kdo"]] += c
+
         if zk == "VSICHNI":
-            podil = c / len(otcove)
-            for o in otcove:
-                saldo[o] -= podil
+            if celkem_jidel > 0:
+                na_jidlo_v = c / celkem_jidel
+                for o in otcove:
+                    saldo[o] -= na_jidlo_v * jidla_otce(o)
         else:
-            lidi = [x for x in zk.split(";") if x in saldo]
-            if lidi:
-                podil = c / len(lidi)
-                for o in lidi:
-                    saldo[o] -= podil
+            podily = {}
+            for cast in zk.split(";"):
+                if ":" in cast:
+                    jm_o, j = cast.split(":")
+                    if jm_o in saldo:
+                        podily[jm_o] = int(float(j))
+            soucet_j = sum(podily.values())
+            if soucet_j > 0:
+                na_jidlo_v = c / soucet_j
+                for jm_o, j in podily.items():
+                    saldo[jm_o] -= na_jidlo_v * j
 
     tbl = pd.DataFrame([{"Otec": o, "Saldo (Kč)": round(saldo[o])} for o in otcove])
     st.dataframe(tbl, use_container_width=True, hide_index=True)
-    st.caption("Saldo: kladné = má dostat zpět, záporné = má doplatit.")
+    st.caption("Saldo: kladné = má dostat zpět, záporné = má doplatit. (Výdaje z banku se sem nepočítají.)")
 
     d = [[o, -s] for o, s in saldo.items() if s < -0.5]
     v = [[o, s] for o, s in saldo.items() if s > 0.5]
@@ -363,7 +450,7 @@ if otcove:
     else:
         st.success("Všichni jsou vyrovnaní 🎉")
 else:
-    st.info("Přidej účastníky, baget a výdaje.")
+    st.info("Přidej účastníky, bank a výdaje.")
 
 st.divider()
 st.caption(f"Data ročníku „{rocnik}\" se ukládají do Google Sheets a jsou sdílená pro všechny s odkazem.")
