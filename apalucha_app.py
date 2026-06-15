@@ -657,11 +657,7 @@ st.markdown(f"""
         <span style="color:#888;font-size:0.78rem;">Pánská jízda s dětmi pod stanem</span>
         <div style="margin:10px auto;border-top:1px dashed rgba(193,132,60,0.5);width:60%;"></div>
         <span style="font-size:0.82rem;">Autor: <b>Pavel Dvořáček</b></span><br>
-        <a href="mailto:pavel.dvoracek@obchod.t-mobile.cz?subject=Apalucha%20-%20zpetna%20vazba"
-           style="display:inline-block;margin-top:8px;color:#0c1a06!important;background-color:{ZELENA_HL};
-                  padding:6px 16px;border-radius:18px;text-decoration:none;font-size:0.78rem;font-weight:700;">
-           📩 Napsat autorovi
-        </a>
+        <span style="font-size:0.82rem;">E-mail: <b>pavel.dvoracek@obchod.t-mobile.cz</b></span>
     </div>
 """, unsafe_allow_html=True)
 
