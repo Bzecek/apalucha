@@ -4,35 +4,43 @@ from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
 # ─────────────────────────────────────────────
-# KONFIGURACE
+# KONFIGURACE — tábornická paleta (oheň)
 # ─────────────────────────────────────────────
-BARVA       = "#2e7d32"
-BARVA_SVE   = "#3B6D11"
-BARVA_KARTA = "#EAF3DE"
+OHEN        = "#e6963c"   # hlavní jantarová (plamen)
+OHEN_SVE    = "#c47a1e"   # tmavší jantar pro text/hover
+OHEN_KARTA  = "rgba(230,150,60,0.14)"   # podklad avataru
+ZELENA      = "#7bbf5a"   # doplňková zeleň (kladné saldo)
+CERVENA     = "#d9603f"   # cihlově červená (záporné saldo)
 
 OTCOVE_SEZNAM = ["Bzek", "Pošták", "Boss", "Tonda", "Jirka", "Kolouch"]
 
-st.set_page_config(page_title="Apalucha – účtování", page_icon="🏕️", layout="centered")
+st.set_page_config(page_title="Apalucha", page_icon="🏕️", layout="centered")
 
 st.markdown(f"""
     <style>
     div.stButton > button {{
         border-radius: 12px;
-        font-weight: 500;
+        font-weight: 600;
         transition: all 0.15s ease;
     }}
     div.stButton > button:hover {{
-        border-color: {BARVA};
-        color: {BARVA};
+        border-color: {OHEN};
+        color: {OHEN_SVE};
     }}
     div.stButton > button[kind="primary"] {{
-        background-color: {BARVA};
-        border-color: {BARVA};
+        background-color: {OHEN};
+        border-color: {OHEN};
+        color: #2b1c08;
     }}
-    [data-testid="stMetricValue"] {{ color: {BARVA}; }}
+    div.stButton > button[kind="primary"]:hover {{
+        background-color: {OHEN_SVE};
+        border-color: {OHEN_SVE};
+        color: #fff;
+    }}
+    [data-testid="stMetricValue"] {{ color: {OHEN_SVE}; }}
     .karta {{
-        background: rgba(46,125,50,0.06);
-        border: 1px solid rgba(46,125,50,0.15);
+        background: {OHEN_KARTA};
+        border: 1px solid rgba(230,150,60,0.25);
         border-radius: 14px;
         padding: 10px 14px;
         margin-bottom: 8px;
@@ -41,13 +49,51 @@ st.markdown(f"""
     }}
     .avatar {{
         width: 38px; height: 38px; border-radius: 50%;
-        background: {BARVA_KARTA}; color: {BARVA_SVE};
+        background: {OHEN_KARTA}; color: {OHEN_SVE};
         display: flex; align-items: center; justify-content: center;
-        font-weight: 600; font-size: 14px; margin-right: 12px;
+        font-weight: 700; font-size: 14px; margin-right: 12px;
         flex-shrink: 0;
+        border: 1px solid rgba(230,150,60,0.4);
+    }}
+    /* tábornický banner */
+    .banner {{
+        background: linear-gradient(180deg, rgba(230,150,60,0.10), rgba(230,150,60,0.02));
+        border-left: 5px solid {OHEN};
+        border-radius: 14px;
+        padding: 20px 22px;
+        margin-bottom: 6px;
+    }}
+    .banner-nazev {{
+        font-size: 34px; font-weight: 700; color: {OHEN};
+        margin: 0; line-height: 1.1;
+    }}
+    .banner-podtitul {{
+        font-size: 13px; color: var(--text-color, #888);
+        margin-top: 6px; opacity: 0.85;
+    }}
+    /* účtenka */
+    .uctenka {{
+        border: 1px dashed rgba(230,150,60,0.55);
+        border-radius: 12px;
+        padding: 16px 18px;
+        margin-top: 14px;
+        font-family: monospace;
+    }}
+    .uctenka-hlava {{
+        text-align: center; font-size: 12px; letter-spacing: 1px;
+        color: {OHEN_SVE}; border-bottom: 1px dashed rgba(230,150,60,0.4);
+        padding-bottom: 8px; margin-bottom: 10px;
+    }}
+    .uctenka-radek {{
+        display: flex; justify-content: space-between;
+        font-size: 14px; padding: 3px 0;
     }}
     </style>
 """, unsafe_allow_html=True)
+
+# zpětná kompatibilita názvů barev používaných dál v kódu
+BARVA = OHEN
+BARVA_SVE = OHEN_SVE
 
 # ─────────────────────────────────────────────
 # PŘIPOJENÍ NA GOOGLE SHEETS
@@ -112,6 +158,17 @@ def smaz_radek(rocnik, idx):
         uloz(rocnik, df)
 
 
+def uprav_radek(rocnik, idx, radek):
+    """Přepíše existující řádek (podle indexu) novými hodnotami."""
+    df = nacti(rocnik).reset_index(drop=True)
+    if idx in df.index:
+        for klic, hodnota in radek.items():
+            df.at[idx, klic] = hodnota
+        uloz(rocnik, df)
+    else:
+        pridej_radek(rocnik, radek)
+
+
 def iniciala(jmeno):
     return (jmeno[:2]).upper() if jmeno else "??"
 
@@ -151,14 +208,6 @@ def tlacitko_smazat(rocnik, idx, klic):
 # ─────────────────────────────────────────────
 # HLAVIČKA + VÝBĚR ROČNÍKU
 # ─────────────────────────────────────────────
-st.markdown(
-    f'<div style="display:flex;align-items:center;margin-bottom:6px;">'
-    f'<span style="font-size:42px;margin-right:12px;">🏕️</span>'
-    f'<h1 style="margin:0;color:{BARVA_SVE};">Apalucha</h1></div>',
-    unsafe_allow_html=True
-)
-st.caption("Otcové a děti pod stanem. Kdo platil za koho — appka spočítá vyrovnání.")
-
 rok_ted = datetime.now().year
 roky = [str(r) for r in range(rok_ted + 1, 2019, -1)]
 c_rok, c_novy = st.columns([2, 1])
@@ -166,6 +215,16 @@ rocnik = c_rok.selectbox("Ročník Apaluchy", roky, index=roky.index(str(rok_ted
 vlastni = c_novy.text_input("…nebo vlastní list", placeholder="2026_jaro")
 if vlastni.strip():
     rocnik = vlastni.strip()
+
+# tábornický banner (varianta B) — zobrazí i vybraný ročník
+st.markdown(
+    f'<div class="banner">'
+    f'<div class="banner-nazev">🏕️ Apalucha</div>'
+    f'<div class="banner-podtitul">Pánská jízda s dětmi · ročník {rocnik}</div>'
+    f'</div>',
+    unsafe_allow_html=True
+)
+st.caption("Appka pohlídá, kdo komu kolik dluží.")
 
 st.divider()
 
@@ -203,6 +262,8 @@ celkem_jidel = sum(jidla_otce(o) for o in otcove)
 
 if "ceka_na_deti" not in st.session_state:
     st.session_state.ceka_na_deti = None
+if "edit_vyd_idx" not in st.session_state:
+    st.session_state.edit_vyd_idx = None
 
 # ─────────────────────────────────────────────
 # 1) OTCOVÉ A DĚTI  (sbalitelná sekce)
@@ -247,7 +308,7 @@ with st.expander(f"⚙️ 1. Otcové a děti ({len(otcove)})", expanded=(len(otc
                 f'<div class="karta">'
                 f'<div class="avatar">{iniciala(r["Kdo"])}</div>'
                 f'<div><div style="font-weight:600;font-size:15px;">{r["Kdo"]}</div>'
-                f'<div style="font-size:12px;color:#888;">{deti_text(deti)} · {1 + deti} jídel</div></div>'
+                f'<div style="font-size:12px;color:#888;">{deti_text(deti)} · {1 + deti} osob</div></div>'
                 f'</div>',
                 unsafe_allow_html=True
             )
@@ -270,8 +331,34 @@ m1, m2, m3 = st.columns(3)
 m1.metric("Vloženo", f"{bank_vlozeno} Kč")
 m2.metric("Utraceno z banku", f"{bank_utraceno} Kč")
 m3.metric("Zůstatek", f"{bank_zustatek} Kč")
+
+# proužek vyčerpání banku (zelená → oranžová → červená)
+if bank_vlozeno > 0:
+    procento = bank_utraceno / bank_vlozeno
+    if procento < 0.7:
+        barva_bar = "#2e7d32"   # zelená
+    elif procento <= 1.0:
+        barva_bar = "#e67e22"   # oranžová
+    else:
+        barva_bar = "#c0392b"   # červená
+    sirka = min(procento * 100, 100)
+    st.markdown(
+        f"""
+        <div style="margin:4px 0 8px 0;">
+            <div style="background:rgba(127,127,127,0.15);border-radius:8px;height:12px;overflow:hidden;">
+                <div style="width:{sirka:.0f}%;height:100%;background:{barva_bar};
+                            border-radius:8px;transition:width 0.4s ease;"></div>
+            </div>
+            <div style="font-size:11px;color:#888;margin-top:3px;text-align:right;">
+                vyčerpáno {procento*100:.0f} %
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 if bank_zustatek < 0:
-    st.warning("Bank je v mínusu — utratilo se víc, než kolik je v něm vloženo.")
+    st.warning("Bank je v mínusu — utratilo se víc, než kolik je v něm vloženo. 😬")
 st.caption("Zůstatek zůstává v banku na příště, nerozpočítává se mezi otce.")
 
 with st.expander("✏️ Upravit vklady do banku", expanded=False):
@@ -304,7 +391,43 @@ with st.expander("✏️ Upravit vklady do banku", expanded=False):
 st.header("3. Výdaje – kdo platil za koho")
 
 if otcove:
-    st.caption("Zadej, kdo platil, kolik, a koho se výdaj týká. Dělí se na jídla (otec + jeho děti).")
+    # zjistíme, jestli editujeme — pokud ano, předvyplníme hodnoty
+    edit_idx = st.session_state.edit_vyd_idx
+    edit_radek = None
+    if edit_idx is not None:
+        _shoda = df_vyd[df_vyd["index"] == edit_idx]
+        if not _shoda.empty:
+            edit_radek = _shoda.iloc[0]
+        else:
+            st.session_state.edit_vyd_idx = None
+            edit_idx = None
+
+    if edit_radek is not None:
+        st.info(f"📝 Upravuješ výdaj: **{edit_radek['Co']}**")
+    else:
+        st.caption("Zadej, kdo platil, kolik, a koho se výdaj týká. Dělí se na osoby (otec + jeho děti).")
+
+    # předvyplnění hodnot při editaci (jen když ještě nejsou v session_state)
+    if edit_radek is not None and "vyd_nacteno" not in st.session_state:
+        st.session_state["vyd_co"] = str(edit_radek["Co"]) if edit_radek["Co"] else ""
+        st.session_state["vyd_kdo"] = str(edit_radek["Kdo"])
+        st.session_state["vyd_castka"] = int(float(edit_radek["Castka"] or 0))
+        zk_e = str(edit_radek["ZaKoho"])
+        if zk_e == "BANK":
+            st.session_state["vyd_typ"] = "Ze společného banku"
+        elif zk_e == "VSICHNI":
+            st.session_state["vyd_typ"] = "Všichni (otcové + děti)"
+        else:
+            st.session_state["vyd_typ"] = "Jen vybraní"
+            vyb = []
+            for cast in zk_e.split(";"):
+                if ":" in cast:
+                    jm_o, j = cast.split(":")
+                    vyb.append(jm_o)
+                    st.session_state[f"vyd_j_{jm_o}"] = int(float(j))
+            st.session_state["vyd_vyb"] = vyb
+            st.session_state["vyd_uprav"] = True
+        st.session_state["vyd_nacteno"] = True
 
     co = st.text_input("Co to bylo", placeholder="společný oběd, půjčovné, pivo…", key="vyd_co")
     c1, c2 = st.columns(2)
@@ -323,16 +446,33 @@ if otcove:
     if typ_del == "Jen vybraní":
         vybrani = st.multiselect("Koho se výdaj týká", otcove, key="vyd_vyb")
         if vybrani:
-            uprav = st.checkbox("Ručně upravit počet jídel u vybraných", key="vyd_uprav")
+            uprav = st.checkbox("Ručně upravit počet osob u vybraných", key="vyd_uprav")
             if uprav:
-                st.caption("Kolik jídel (otec + děti) připadá na každého u tohoto výdaje:")
+                st.caption("Kolik osob (otec + děti) připadá na každého u tohoto výdaje:")
                 for o in vybrani:
                     rucni_jidla[o] = st.number_input(
-                        f"{o} — počet jídel",
+                        f"{o} — počet osob",
                         min_value=1, max_value=20, value=jidla_otce(o), step=1, key=f"vyd_j_{o}"
                     )
 
-    if st.button("➕ Přidat výdaj", type="primary", use_container_width=True, key="vyd_pridat"):
+    def _vycisti_formular():
+        for k in ["vyd_co", "vyd_castka", "vyd_typ", "vyd_vyb", "vyd_uprav", "vyd_nacteno"]:
+            st.session_state.pop(k, None)
+        for o in OTCOVE_SEZNAM:
+            st.session_state.pop(f"vyd_j_{o}", None)
+        st.session_state.edit_vyd_idx = None
+
+    popisek_tlacitka = "💾 Uložit změny" if edit_radek is not None else "➕ Přidat výdaj"
+    cb1, cb2 = st.columns([3, 1]) if edit_radek is not None else (st.container(), None)
+
+    klik_ulozit = cb1.button(popisek_tlacitka, type="primary", use_container_width=True, key="vyd_pridat")
+    klik_zrusit = cb2.button("Zrušit", use_container_width=True, key="vyd_zrusit") if cb2 is not None else False
+
+    if klik_zrusit:
+        _vycisti_formular()
+        st.rerun()
+
+    if klik_ulozit:
         if not castka or castka <= 0:
             st.warning("Zadej částku.")
         elif typ_del == "Jen vybraní" and not vybrani:
@@ -348,10 +488,15 @@ if otcove:
                     j = rucni_jidla.get(o, jidla_otce(o))
                     casti.append(f"{o}:{int(j)}")
                 zk = ";".join(casti)
-            pridej_radek(rocnik, {
+            radek_data = {
                 "Typ": "vydaj", "Kdo": kdo, "Co": co.strip() or "—", "Castka": int(castka),
                 "KrkDeti": 0, "ZaKoho": zk, "Datum": datetime.now().strftime("%d.%m.%Y %H:%M"),
-            })
+            }
+            if edit_radek is not None:
+                uprav_radek(rocnik, edit_idx, radek_data)
+            else:
+                pridej_radek(rocnik, radek_data)
+            _vycisti_formular()
             st.rerun()
 
     st.write("")
@@ -367,12 +512,12 @@ if otcove:
                 for cast in zk.split(";"):
                     if ":" in cast:
                         jm_o, j = cast.split(":")
-                        kusy.append(f"{jm_o} ({j} j.)")
+                        kusy.append(f"{jm_o} ({j} os.)")
                     else:
                         kusy.append(cast)
                 popis = ", ".join(kusy)
             castka_v = int(float(r["Castka"] or 0))
-            c1, c2 = st.columns([5, 1])
+            c1, c2, c3 = st.columns([5, 1, 1])
             c1.markdown(
                 f'<div class="karta">'
                 f'<div class="avatar">{iniciala(r["Kdo"])}</div>'
@@ -382,6 +527,15 @@ if otcove:
                 unsafe_allow_html=True
             )
             with c2:
+                if st.button("✏️", key=f"edit_vyd_{r['index']}", use_container_width=True):
+                    # vyčistíme případný předchozí stav a nastavíme nový k editaci
+                    for k in ["vyd_co", "vyd_castka", "vyd_typ", "vyd_vyb", "vyd_uprav", "vyd_nacteno"]:
+                        st.session_state.pop(k, None)
+                    for o in OTCOVE_SEZNAM:
+                        st.session_state.pop(f"vyd_j_{o}", None)
+                    st.session_state.edit_vyd_idx = r["index"]
+                    st.rerun()
+            with c3:
                 tlacitko_smazat(rocnik, r["index"], f"vyd_{r['index']}")
     else:
         st.info("Zatím žádné výdaje.")
@@ -422,9 +576,26 @@ if otcove:
                 for jm_o, j in podily.items():
                     saldo[jm_o] -= na_jidlo_v * j
 
-    tbl = pd.DataFrame([{"Otec": o, "Saldo (Kč)": round(saldo[o])} for o in otcove])
-    st.dataframe(tbl, use_container_width=True, hide_index=True)
-    st.caption("Saldo: kladné = má dostat zpět, záporné = má doplatit. (Výdaje z banku se sem nepočítají.)")
+    st.caption("Saldo: zelené = má dostat zpět, červené = má doplatit. (Výdaje z banku se sem nepočítají.)")
+    for o in otcove:
+        s = round(saldo[o])
+        if s > 0:
+            barva_s = ZELENA; znak = "+"; popis_s = "dostane zpět"
+        elif s < 0:
+            barva_s = CERVENA; znak = ""; popis_s = "doplatí"
+        else:
+            barva_s = "#888"; znak = ""; popis_s = "vyrovnán"
+        st.markdown(
+            f'<div class="karta" style="justify-content:space-between;">'
+            f'<div style="display:flex;align-items:center;">'
+            f'<div class="avatar">{iniciala(o)}</div>'
+            f'<div style="font-weight:600;font-size:15px;">{o}</div></div>'
+            f'<div style="text-align:right;">'
+            f'<div style="font-weight:700;font-size:16px;color:{barva_s};">{znak}{s} Kč</div>'
+            f'<div style="font-size:11px;color:#888;">{popis_s}</div></div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
 
     d = [[o, -s] for o, s in saldo.items() if s < -0.5]
     v = [[o, s] for o, s in saldo.items() if s > 0.5]
@@ -444,14 +615,23 @@ if otcove:
 
     st.subheader("Kdo komu pošle")
     if platby:
-        radky_txt = []
-        for od, komu, c in platby:
-            st.success(f"**{od}** → **{komu}**: {int(c)} Kč")
-            radky_txt.append(f"{od} → {komu}: {int(c)} Kč")
+        # tábornická účtenka
+        radky_html = "".join(
+            f'<div class="uctenka-radek"><span>{od} → {komu}</span><span>{int(c)} Kč</span></div>'
+            for od, komu, c in platby
+        )
+        st.markdown(
+            f'<div class="uctenka">'
+            f'<div class="uctenka-hlava">— ÚČTENKA APALUCHA {rocnik} —</div>'
+            f'{radky_html}'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+        radky_txt = [f"{od} → {komu}: {int(c)} Kč" for od, komu, c in platby]
         souhrn = f"🏕️ Apalucha {rocnik} – vyrovnání:\n" + "\n".join(radky_txt)
         st.text_area("Pro zkopírování do skupiny", souhrn, height=120)
     else:
-        st.success("Všichni jsou vyrovnaní 🎉")
+        st.success("Všichni vyrovnaní, můžeme na pivo 🍺")
 
     # Celková útrata za celou partu — pro představu, kolik nás to stálo
     utrata_celkem = sum(int(float(r["Castka"] or 0)) for _, r in df_vyd.iterrows())
@@ -460,10 +640,26 @@ if otcove:
     cu1, cu2 = st.columns(2)
     cu1.metric("Všechny výdaje dohromady", f"{utrata_celkem} Kč")
     if celkem_jidel > 0:
-        cu2.metric("Na jedno jídlo (orientačně)", f"{round(utrata_celkem / celkem_jidel)} Kč")
+        cu2.metric("Na jednu osobu (orientačně)", f"{round(utrata_celkem / celkem_jidel)} Kč")
     st.caption("Součet všech výdajů (z banku i mezi otci) — kolik nás celá Apalucha stála.")
 else:
     st.info("Přidej účastníky, bank a výdaje.")
 
 st.divider()
 st.caption(f"Data ročníku „{rocnik}\" se ukládají do Google Sheets a jsou sdílená pro všechny s odkazem.")
+
+st.markdown(f"""
+    <div style="background-color:rgba(230,150,60,0.08);border:1px solid rgba(230,150,60,0.25);
+                padding:16px;border-radius:14px;margin-top:18px;text-align:center;">
+        <span style="font-weight:700;font-size:0.95rem;color:{OHEN};">🏕️ Apalucha</span><br>
+        <span style="color:#888;font-size:0.78rem;">Pánská jízda s dětmi pod stanem</span>
+        <div style="margin:10px auto;border-top:1px dashed rgba(230,150,60,0.4);width:60%;"></div>
+        <span style="font-size:0.82rem;">Autor: <b>Pavel Dvořáček</b></span><br>
+        <a href="mailto:pavel.dvoracek@obchod.t-mobile.cz?subject=Apalucha%20-%20zpetna%20vazba"
+           style="display:inline-block;margin-top:8px;color:#2b1c08!important;background-color:{OHEN};
+                  padding:6px 16px;border-radius:18px;text-decoration:none;font-size:0.78rem;font-weight:700;">
+           📩 Napsat autorovi
+        </a>
+    </div>
+""", unsafe_allow_html=True)
+
