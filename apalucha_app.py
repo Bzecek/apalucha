@@ -263,7 +263,18 @@ bank_vlozeno  = sum(int(float(c or 0)) for c in df_bank["Castka"]) if not df_ban
 bank_utraceno = sum(int(float(r["Castka"] or 0)) for _, r in df_vyd.iterrows() if str(r["ZaKoho"]) == "BANK")
 bank_zustatek = bank_vlozeno - bank_utraceno
 
-with st.expander(f"🏦 2. Společný bank (zůstatek {bank_zustatek} Kč)", expanded=False):
+st.header("2. Společný bank")
+
+# Přehled banku — VŽDY viditelný (mimo sbalený panel)
+m1, m2, m3 = st.columns(3)
+m1.metric("Vloženo", f"{bank_vlozeno} Kč")
+m2.metric("Utraceno z banku", f"{bank_utraceno} Kč")
+m3.metric("Zůstatek", f"{bank_zustatek} Kč")
+if bank_zustatek < 0:
+    st.warning("Bank je v mínusu — utratilo se víc, než kolik je v něm vloženo.")
+st.caption("Zůstatek zůstává v banku na příště, nerozpočítává se mezi otce.")
+
+with st.expander("✏️ Upravit vklady do banku", expanded=False):
     if otcove:
         with st.form("f_bank", clear_on_submit=False):
             st.caption("Kolik každý otec vložil na začátku do společného banku (např. 3 000 Kč).")
@@ -284,14 +295,6 @@ with st.expander(f"🏦 2. Společný bank (zůstatek {bank_zustatek} Kč)", exp
                 } for o in otcove]
                 uloz(rocnik, pd.concat([df_now, pd.DataFrame(nove)], ignore_index=True))
                 st.rerun()
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Vloženo", f"{bank_vlozeno} Kč")
-        m2.metric("Utraceno z banku", f"{bank_utraceno} Kč")
-        m3.metric("Zůstatek", f"{bank_zustatek} Kč")
-        if bank_zustatek < 0:
-            st.warning("Bank je v mínusu — utratilo se víc, než kolik je v něm vloženo.")
-        st.caption("Zůstatek zůstává v banku na příště, nerozpočítává se mezi otce.")
     else:
         st.info("Nejdřív přidej účastníky.")
 
@@ -449,6 +452,16 @@ if otcove:
         st.text_area("Pro zkopírování do skupiny", souhrn, height=120)
     else:
         st.success("Všichni jsou vyrovnaní 🎉")
+
+    # Celková útrata za celou partu — pro představu, kolik nás to stálo
+    utrata_celkem = sum(int(float(r["Castka"] or 0)) for _, r in df_vyd.iterrows())
+    st.divider()
+    st.subheader("💸 Celková útrata")
+    cu1, cu2 = st.columns(2)
+    cu1.metric("Všechny výdaje dohromady", f"{utrata_celkem} Kč")
+    if celkem_jidel > 0:
+        cu2.metric("Na jedno jídlo (orientačně)", f"{round(utrata_celkem / celkem_jidel)} Kč")
+    st.caption("Součet všech výdajů (z banku i mezi otci) — kolik nás celá Apalucha stála.")
 else:
     st.info("Přidej účastníky, bank a výdaje.")
 
